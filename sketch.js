@@ -36,6 +36,14 @@ const FAST_ZOMBIE = {
   health: 60
 };
 
+let backgroundImg;
+let roadImg;
+
+function preload() {
+  backgroundImg = loadImage('assets/background.png');
+  roadImg = loadImage('assets/road.png');
+}
+
 function startLevel() {
   textSize(16); // Ensure zombie labels are always the correct size
   zombies = [];
@@ -85,9 +93,12 @@ function startLevel() {
     zombie.rotationLock = true;
     zombies.push(zombie);
   }
-  // Create escape pod at far right (move left so text fits)
+  // Create escape pod at far right, centered in the ground area
   if (escapePod) escapePod.remove();
-  escapePod = new Sprite(worldWidth - 100, worldHeight / 2, 120, 80); // Moved 60px left
+  let bgHeight = Math.floor(worldHeight * 0.4);
+  let groundHeight = worldHeight - bgHeight;
+  let groundCenterY = bgHeight + groundHeight / 2;
+  escapePod = new Sprite(worldWidth - 100, groundCenterY, 120, 80); // Moved 60px left
   escapePod.color = 'purple';
   escapePod.text = 'Escape Pod';
   escapePod.textSize = 24;
@@ -145,11 +156,27 @@ function restartGame() {
 }
 
 function drawBackground() {
-  // Simple repeating pattern for ground
-  for (let x = 0; x < worldWidth; x += 40) {
-    for (let y = 0; y < worldHeight; y += 40) {
-      fill((x/40 + y/40) % 2 === 0 ? '#b0e0e6' : '#a0c8d0');
-      rect(x, y, 40, 40);
+  // Draw the background image in the top 40% of the world
+  let bgHeight = Math.floor(worldHeight * 0.4);
+  if (backgroundImg) {
+    image(
+      backgroundImg,
+      0, 0, // x, y in world coordinates
+      worldWidth, bgHeight, // stretch to full width, top 40% height
+      0, 0, backgroundImg.width, backgroundImg.height
+    );
+  }
+  // Draw the road image scaled to fit the ground area (bottom 60%)
+  if (roadImg) {
+    let groundHeight = worldHeight - bgHeight;
+    let scale = groundHeight / 550;
+    let scaledW = roadImg.width * scale;
+    let scaledH = roadImg.height * scale;
+    if (roadImg.width > 0 && roadImg.height > 0) {
+      let yStart = bgHeight; // Start road just below the background
+      for (let x = 0; x < worldWidth; x += scaledW) {
+        image(roadImg, x, yStart, scaledW, scaledH);
+      }
     }
   }
 }
@@ -181,9 +208,10 @@ function update() {
     player.vel.y = 0;
   }
 
-  // Keep player inside the world
+  // Prevent player from entering the top 40% (background area)
+  let minY = Math.floor(worldHeight * 0.4) + player.height / 2;
   player.x = constrain(player.x, player.width/2, worldWidth - player.width/2);
-  player.y = constrain(player.y, player.height/2, worldHeight - player.height/2);
+  player.y = constrain(player.y, minY, worldHeight - player.height/2);
 
   // Zombies follow player
   let touching = false;
@@ -196,6 +224,9 @@ function update() {
     let zSpeed = zombie.isFast ? zombieSpeed * FAST_ZOMBIE.speedMultiplier : zombieSpeed;
     zombie.vel.x = Math.cos(angle) * zSpeed;
     zombie.vel.y = Math.sin(angle) * zSpeed;
+    // Prevent zombies from entering the top 40% (background area)
+    let zMinY = Math.floor(worldHeight * 0.4) + zombie.height / 2;
+    zombie.y = constrain(zombie.y, zMinY, worldHeight - zombie.height/2);
     // Draw zombie health bar (in world coordinates), but not on game over
     if (!gameOver && player.health > 0) {
       let zBarW = zombie.isBoss ? 56 : 28;
