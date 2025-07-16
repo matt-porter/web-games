@@ -1,3 +1,5 @@
+// This file is now deprecated. See zombie-survival/sketch.js for the zombie survival game.
+
 new Q5();
 
 let player;
