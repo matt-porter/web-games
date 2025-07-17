@@ -5,17 +5,17 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 // const controls = new OrbitControls( camera, renderer.domElement );
 const loader = new GLTFLoader();
 
-var scene, camera, renderer, light;
-var player = null;
-var wall = [];
-var ball; // Ball will be created later
-var playerModel = null; // Store loaded player model
-var keys = {};
-var score = 0;
-var ballVel = { x: 0, y: 0, z: 0 };
-var ballLaunched = false;
-var gameOver = false;
-var win = false;
+let scene, camera, renderer, light;
+let player = null;
+let wall = [];
+let ball; // Ball will be created later
+let playerModel = null; // Store loaded player model
+let keys = {};
+let score = 0;
+let ballVel = { x: 0, y: 0, z: 0 };
+let ballLaunched = false;
+let gameOver = false;
+let win = false;
 
 init();
 animate();
@@ -42,21 +42,21 @@ function init() {
   scene.add(new THREE.AmbientLight(0x888888));
 
   // Ground
-  var groundGeo = new THREE.BoxGeometry(30, 1, 30);
-  var groundMat = new THREE.MeshPhongMaterial({color: 0x444444});
-  var ground = new THREE.Mesh(groundGeo, groundMat);
+  let groundGeo = new THREE.BoxGeometry(30, 1, 30);
+  let groundMat = new THREE.MeshPhongMaterial({color: 0x444444});
+  let ground = new THREE.Mesh(groundGeo, groundMat);
   ground.position.y = -0.5;
   scene.add(ground);
 
   // Wall of bricks
-  var brickRows = 4, brickCols = 8;
-  var brickW = 2, brickH = 1, brickD = 1;
-  var wallY = 2, wallZ = -10;
-  for (var row = 0; row < brickRows; row++) {
-    for (var col = 0; col < brickCols; col++) {
-      var brickGeo = new THREE.BoxGeometry(brickW, brickH, brickD);
-      var brickMat = new THREE.MeshPhongMaterial({color: 0xff4444});
-      var brick = new THREE.Mesh(brickGeo, brickMat);
+  let brickRows = 4, brickCols = 8;
+  let brickW = 2, brickH = 1, brickD = 1;
+  let wallY = 2, wallZ = -10;
+  for (let row = 0; row < brickRows; row++) {
+    for (let col = 0; col < brickCols; col++) {
+      let brickGeo = new THREE.BoxGeometry(brickW, brickH, brickD);
+      let brickMat = new THREE.MeshPhongMaterial({color: 0xff4444});
+      let brick = new THREE.Mesh(brickGeo, brickMat);
       brick.position.set((col - brickCols/2) * (brickW + 0.2), wallY + row * (brickH + 0.2), wallZ);
       brick.userData = { hits: 0 };
       scene.add(brick);
@@ -65,34 +65,35 @@ function init() {
   }
 
   // Ball (football)
-  var ballGeo = new THREE.SphereGeometry(0.6, 32, 32);
-  var ballMat = new THREE.MeshPhongMaterial({color: 0xffff44});
+  let ballGeo = new THREE.SphereGeometry(0.6, 32, 32);
+  let ballMat = new THREE.MeshPhongMaterial({color: 0xffff44});
   ball = new THREE.Mesh(ballGeo, ballMat);
   ball.position.set(0, 1, 8); // Default position until player is loaded
   scene.add(ball);
 
   // GLTFLoader for player model
-  loader.load('assets/blocky.gltf', function(gltf) {
-    playerModel = gltf.scene;
-    playerModel.position.set(0, 1, 10);
-    playerModel.scale.set(3.6, 3.6, 3.6); // 3x bigger
-    scene.add(playerModel);
-    player = playerModel;
-    // Now that player is loaded, update ball position
-    ball.position.x = player.position.x;
-    ball.position.z = player.position.z - 2;
-    ball.position.y = 1;
-  }, undefined, function(error) {
-    console.error('Error loading blocky.gltf:', error);
-  });
+    loader.load('assets/blocky.gltf', function(gltf) {
+        playerModel = gltf.scene;
+        playerModel.position.set(0, 1, 10);
+        playerModel.scale.set(3.6, 3.6, 3.6); // 3x bigger
+        scene.add(playerModel);
+        player = playerModel;
+        // Now that player is loaded, update ball position
+        ball.position.x = player.position.x;
+        ball.position.z = player.position.z - 2;
+        ball.position.y = 1;
+    }, undefined, function(error) {
+        console.error('Error loading blocky.gltf:', error);
+    });
+  
   
   // Keyboard controls
   window.addEventListener('keydown', e => {
     keys[e.key.toLowerCase()] = true;
     // Space to launch ball or kick if near player
     if (e.key === ' ') {
-      var distZ = Math.abs(ball.position.z - player.position.z);
-      var distX = Math.abs(ball.position.x - player.position.x);
+      let distZ = Math.abs(ball.position.z - player.position.z);
+      let distX = Math.abs(ball.position.x - player.position.x);
       if (!ballLaunched) {
         ballVel.x = (player.position.x - ball.position.x) * 0.2;
         ballVel.z = -0.7;
@@ -100,10 +101,10 @@ function init() {
         ballLaunched = true;
       } else if (distZ < 2 && distX < 1.5) {
         // Kick: boost ball away from player
-        var kickPower = 0.7;
-        var dx = ball.position.x - player.position.x;
-        var dz = ball.position.z - player.position.z;
-        var mag = Math.sqrt(dx*dx + dz*dz) || 1;
+        let kickPower = 0.7;
+        let dx = ball.position.x - player.position.x;
+        let dz = ball.position.z - player.position.z;
+        let mag = Math.sqrt(dx*dx + dz*dz) || 1;
         ballVel.x += (dx / mag) * kickPower + (Math.random() - 0.5) * 0.1;
         ballVel.z += (dz / mag) * kickPower;
         ballVel.y = 0.25;
@@ -126,7 +127,7 @@ function animate() {
   if (player === null) {   
     return requestAnimationFrame(animate);
     }
-  var speed = 0.3;
+  let speed = 0.3;
   if (keys['a'] || keys['arrowleft']) player.position.x -= speed;
   if (keys['d'] || keys['arrowright']) player.position.x += speed;
   if (keys['w'] || keys['arrowup']) player.position.z -= speed;
@@ -143,7 +144,7 @@ function animate() {
     // Gravity
     ballVel.y -= 0.02;
     // Ball speed limit
-    var maxSpeed = 1.5;
+    let maxSpeed = 1.5;
     ballVel.x = Math.max(-maxSpeed, Math.min(maxSpeed, ballVel.x));
     ballVel.y = Math.max(-maxSpeed, Math.min(maxSpeed, ballVel.y));
     ballVel.z = Math.max(-maxSpeed, Math.min(maxSpeed, ballVel.z));
@@ -161,9 +162,9 @@ function animate() {
     // Improved player collision
     if (intersect(ball, player)) {
       // Find overlap and push ball out
-      var pBox = new THREE.Box3().setFromObject(player);
-      var bBox = new THREE.Box3().setFromObject(ball);
-      var overlapZ = pBox.max.z - bBox.min.z;
+      let pBox = new THREE.Box3().setFromObject(player);
+      let bBox = new THREE.Box3().setFromObject(ball);
+      let overlapZ = pBox.max.z - bBox.min.z;
       if (overlapZ > 0 && ballVel.z > 0) {
         ball.position.z = pBox.min.z - (bBox.max.z - bBox.min.z) / 2 - 0.01;
         ballVel.z = -Math.max(Math.abs(ballVel.z) * 0.95, 0.6); // Always enough energy
@@ -171,7 +172,7 @@ function animate() {
         ballVel.y = 0.22;
       }
       // Side collision
-      var overlapX = Math.min(pBox.max.x, bBox.max.x) - Math.max(pBox.min.x, bBox.min.x);
+      let overlapX = Math.min(pBox.max.x, bBox.max.x) - Math.max(pBox.min.x, bBox.min.x);
       if (overlapX > 0 && Math.abs(ballVel.x) > 0) {
         if (ball.position.x < player.position.x) {
           ball.position.x = pBox.min.x - (bBox.max.x - bBox.min.x) / 2 - 0.01;
@@ -182,8 +183,8 @@ function animate() {
       }
     }
     // Brick collision
-    for (var i = wall.length - 1; i >= 0; i--) {
-      var brick = wall[i];
+    for (let i = wall.length - 1; i >= 0; i--) {
+      let brick = wall[i];
       if (intersect(ball, brick)) {
         // Ensure ball returns toward player after hitting brick
         ballVel.z = Math.max(0.7, Math.abs(ballVel.z)) * (ball.position.z < player.position.z ? 1 : -1);
@@ -219,7 +220,7 @@ function animate() {
 }
 
 function showMessage(msg) {
-  var div = document.getElementById('message');
+  let div = document.getElementById('message');
   if (!div) {
     div = document.createElement('div');
     div.id = 'message';
@@ -246,8 +247,8 @@ window.addEventListener('keydown', e => {
 
 function intersect(a, b) {
   // Simple AABB collision
-  var aBox = new THREE.Box3().setFromObject(a);
-  var bBox = new THREE.Box3().setFromObject(b);
+  let aBox = new THREE.Box3().setFromObject(a);
+  let bBox = new THREE.Box3().setFromObject(b);
   return aBox.intersectsBox(bBox);
 }
 
