@@ -41,11 +41,13 @@ function init() {
   scene.add(light);
   scene.add(new THREE.AmbientLight(0x888888));
 
-  // Ground
+  // Ground (sloped)
   let groundGeo = new THREE.BoxGeometry(30, 1, 30);
   let groundMat = new THREE.MeshPhongMaterial({color: 0x444444});
   let ground = new THREE.Mesh(groundGeo, groundMat);
   ground.position.y = -0.5;
+//   remove slope
+//   ground.rotation.x = -Math.PI / 24; // ~7.5 degrees slope toward player
   scene.add(ground);
 
   // Wall of bricks
@@ -99,7 +101,7 @@ function init() {
         ballVel.z = -0.7;
         ballVel.y = 0.1;
         ballLaunched = true;
-      } else if (distZ < 2 && distX < 1.5) {
+      } else if (distZ < 4 && distX < 4) {
         // Kick: boost ball away from player
         let kickPower = 0.7;
         let dx = ball.position.x - player.position.x;
@@ -107,13 +109,20 @@ function init() {
         let mag = Math.sqrt(dx*dx + dz*dz) || 1;
         ballVel.x += (dx / mag) * kickPower + (Math.random() - 0.5) * 0.1;
         ballVel.z += (dz / mag) * kickPower;
-        ballVel.y = 0.25;
+        ballVel.y = 0.4; // Higher kick for upper bricks
       }
     }
   });
   window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
 
   window.addEventListener('resize', onWindowResize);
+
+  // Invisible back wall (positive Z)
+  let backWallGeo = new THREE.BoxGeometry(30, 10, 1);
+  let backWallMat = new THREE.MeshPhongMaterial({color: 0x222233, transparent: true, opacity: 0});
+  let backWall = new THREE.Mesh(backWallGeo, backWallMat);
+  backWall.position.set(0, 5, 18.5); // Just behind player area
+  scene.add(backWall);
 }
 
 function animate() {
@@ -155,39 +164,74 @@ function animate() {
       ballVel.x *= 0.98; // Less damping
       ballVel.z *= 0.98; // Less damping
       if (Math.abs(ballVel.y) < 0.05) ballVel.y = 0;
+      // Slope effect: accelerate ball toward player (positive Z)
+      ballVel.z += 0.03; // Slope strength, tweak for gameplay
     }
     // Wall boundaries
     if (ball.position.x < -14 || ball.position.x > 14) ballVel.x *= -1;
-    if (ball.position.z < -12 || ball.position.z > 18) ballVel.z *= -1;
-    // Improved player collision
+    if (ball.position.z < -12) ballVel.z *= -1;
+    // Bounce off invisible back wall
+    if (ball.position.z > 18) {
+      ball.position.z = 18;
+      ballVel.z *= -0.9; // Slight damping for bounce
+    }
+    // Improved player collision with variable bounce
     if (intersect(ball, player)) {
-      // Find overlap and push ball out
+      // Calculate overlap and push ball out
       let pBox = new THREE.Box3().setFromObject(player);
       let bBox = new THREE.Box3().setFromObject(ball);
       let overlapZ = pBox.max.z - bBox.min.z;
       if (overlapZ > 0 && ballVel.z > 0) {
+        // --- Variable bounce: reflect velocity over normal ---
+        let normal = new THREE.Vector3(
+          ball.position.x - player.position.x,
+          0,
+          ball.position.z - player.position.z
+        ).normalize();
+        let ballVelVec = new THREE.Vector3(ballVel.x, 0, ballVel.z);
+        let reflected = ballVelVec.clone().sub(normal.clone().multiplyScalar(2 * ballVelVec.dot(normal)));
+        // Add some of player's movement to ball for realism
+        let playerVelX = (keys['d'] || keys['arrowright'] ? 0.3 : 0) - (keys['a'] || keys['arrowleft'] ? 0.3 : 0);
+        let playerVelZ = (keys['s'] || keys['arrowdown'] ? 0.3 : 0) - (keys['w'] || keys['arrowup'] ? 0.3 : 0);
+        reflected.x += playerVelX * 0.5;
+        reflected.z += playerVelZ * 0.5;
+        // Damping for energy loss
+        reflected.multiplyScalar(0.92);
+        ballVel.x = reflected.x;
+        ballVel.z = reflected.z;
+        ballVel.y = 0.22; // Consistent upward bounce
+        // Push ball out of player
         ball.position.z = pBox.min.z - (bBox.max.z - bBox.min.z) / 2 - 0.01;
-        ballVel.z = -Math.max(Math.abs(ballVel.z) * 0.95, 0.6); // Always enough energy
-        ballVel.x += (player.position.x - ball.position.x) * 0.2;
-        ballVel.y = 0.22;
       }
-      // Side collision
+      // Side collision (variable bounce)
       let overlapX = Math.min(pBox.max.x, bBox.max.x) - Math.max(pBox.min.x, bBox.min.x);
       if (overlapX > 0 && Math.abs(ballVel.x) > 0) {
+        let normalX = ball.position.x < player.position.x ? -1 : 1;
+        ballVel.x = -ballVel.x * 0.9 + normalX * 0.1;
         if (ball.position.x < player.position.x) {
           ball.position.x = pBox.min.x - (bBox.max.x - bBox.min.x) / 2 - 0.01;
         } else {
           ball.position.x = pBox.max.x + (bBox.max.x - bBox.min.x) / 2 + 0.01;
         }
-        ballVel.x *= -0.9; // Less damping
       }
     }
-    // Brick collision
+    // Improved brick collision with variable bounce
     for (let i = wall.length - 1; i >= 0; i--) {
       let brick = wall[i];
       if (intersect(ball, brick)) {
-        // Ensure ball returns toward player after hitting brick
-        ballVel.z = Math.max(0.7, Math.abs(ballVel.z)) * (ball.position.z < player.position.z ? 1 : -1);
+        // --- Variable bounce: reflect velocity over normal ---
+        let normal = new THREE.Vector3(
+          ball.position.x - brick.position.x,
+          ball.position.y - brick.position.y,
+          ball.position.z - brick.position.z
+        ).normalize();
+        let ballVelVec = new THREE.Vector3(ballVel.x, ballVel.y, ballVel.z);
+        let reflected = ballVelVec.clone().sub(normal.clone().multiplyScalar(2 * ballVelVec.dot(normal)));
+        // Damping and slight randomization for variety
+        reflected.multiplyScalar(0.85 + Math.random() * 0.1);
+        ballVel.x = reflected.x;
+        ballVel.y = reflected.y;
+        ballVel.z = reflected.z;
         brick.userData.hits++;
         if (brick.userData.hits >= 3) {
           scene.remove(brick);
@@ -203,11 +247,7 @@ function animate() {
       win = true;
       showMessage('You Win! Press R to restart.');
     }
-    // Loss condition: ball behind player
-    if (ball.position.z > 18) {
-      gameOver = true;
-      showMessage('Game Over! Press R to restart.');
-    }
+    // Remove loss condition for ball behind player
   } else {
     // Keep ball in front of player until launch
     ball.position.x = player.position.x;
