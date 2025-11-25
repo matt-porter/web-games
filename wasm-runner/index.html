@@ -18,21 +18,26 @@
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            padding: 20px;
+            padding: 10px;
+            margin: 0;
+            overflow-x: hidden;
         }
 
         .container {
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 25px;
+            gap: 15px;
+            width: 100%;
+            max-width: 800px;
         }
 
         h1 {
             color: #fff;
-            font-size: 40px;
+            font-size: clamp(24px, 6vw, 40px);
             text-shadow: 3px 3px 0px rgba(0, 0, 0, 0.5);
             letter-spacing: 2px;
+            margin: 10px 0;
         }
 
         #gameCanvas {
@@ -42,6 +47,10 @@
             box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
             image-rendering: pixelated;
             image-rendering: crisp-edges;
+            width: 100%;
+            max-width: 100%;
+            height: auto;
+            aspect-ratio: 600 / 400;
         }
 
         .hud {
@@ -72,11 +81,13 @@
         .controls {
             color: #fff;
             text-align: center;
+            width: 100%;
             max-width: 600px;
             background: rgba(0, 0, 0, 0.6);
-            padding: 20px;
+            padding: 15px;
             border-radius: 10px;
             border: 2px solid #667eea;
+            font-size: clamp(12px, 2.5vw, 14px);
         }
 
         .controls h2 {
@@ -124,8 +135,10 @@
 
         #gameContainer {
             position: relative;
-            width: 600px;
-            height: 400px;
+            width: 100%;
+            max-width: 600px;
+            aspect-ratio: 600 / 400;
+            margin: 0 auto;
         }
 
         .pause-text {
@@ -167,10 +180,10 @@
             <div class="pause-text" id="pauseText">⏸ PAUSED</div>
         </div>
 
-        <div id="leaderboard" style="display: none; color: #fff; background: rgba(0, 0, 0, 0.8); padding: 20px; border-radius: 10px; border: 2px solid #667eea; margin-top: 20px; max-width: 600px;">
-            <h2 style="color: #00ff00; text-shadow: 0 0 10px rgba(0, 255, 0, 0.7); margin-bottom: 15px;">🏆 HIGH SCORES</h2>
-            <div id="scoresList" style="font-family: monospace; line-height: 1.8;"></div>
-            <button id="clearScoresBtn" style="margin-top: 15px; font-size: 14px; padding: 8px 15px;">Clear Scores</button>
+        <div id="leaderboard" style="display: none; color: #fff; background: rgba(0, 0, 0, 0.8); padding: 15px; border-radius: 10px; border: 2px solid #667eea; margin-top: 20px; width: 100%; max-width: 600px;">
+            <h2 style="color: #00ff00; text-shadow: 0 0 10px rgba(0, 255, 0, 0.7); margin-bottom: 15px; font-size: clamp(16px, 4vw, 20px);">🏆 HIGH SCORES</h2>
+            <div id="scoresList" style="font-family: monospace; line-height: 1.8; font-size: clamp(11px, 2.2vw, 13px);"></div>
+            <button id="clearScoresBtn" style="margin-top: 15px; font-size: clamp(12px, 2.5vw, 14px); padding: 8px 15px;">Clear Scores</button>
         </div>
 
         <div class="controls">
@@ -187,8 +200,12 @@
         let gameState;
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        const containerWidth = 600;
-        const containerHeight = 400;
+        
+        // Set canvas internal size (actual resolution)
+        let containerWidth = 600;
+        let containerHeight = 400;
+        canvas.width = containerWidth;
+        canvas.height = containerHeight;
 
         const hudScore = document.getElementById('hudScore');
         const hudLevel = document.getElementById('hudLevel');
