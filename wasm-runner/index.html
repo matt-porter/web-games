@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WASM Runner</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 25px;
+        }
+
+        h1 {
+            color: #fff;
+            font-size: 40px;
+            text-shadow: 3px 3px 0px rgba(0, 0, 0, 0.5);
+            letter-spacing: 2px;
+        }
+
+        #gameCanvas {
+            display: block;
+            background: #1a1a2e;
+            border: 4px solid #fff;
+            box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        .hud {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            color: #00ff00;
+            font-size: 16px;
+            text-shadow: 0 0 10px rgba(0, 255, 0, 0.7);
+            font-weight: bold;
+            line-height: 1.8;
+            font-family: 'Courier New', monospace;
+            z-index: 100;
+        }
+
+        .hud-item {
+            margin-bottom: 8px;
+        }
+
+        .hud-label {
+            color: #00ff00;
+        }
+
+        .hud-value {
+            color: #ffff00;
+        }
+
+        .controls {
+            color: #fff;
+            text-align: center;
+            max-width: 600px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid #667eea;
+        }
+
+        .controls h2 {
+            margin-bottom: 15px;
+            font-size: 20px;
+            color: #00ff00;
+            text-shadow: 0 0 10px rgba(0, 255, 0, 0.7);
+        }
+
+        .controls p {
+            margin: 8px 0;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .info {
+            color: #aaa;
+            font-size: 12px;
+            margin-top: 15px;
+            border-top: 1px solid #667eea;
+            padding-top: 10px;
+        }
+
+        button {
+            padding: 12px 30px;
+            font-size: 16px;
+            background: linear-gradient(135deg, #00ff00, #00cc00);
+            border: 2px solid #00ff00;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            color: #000;
+            transition: all 0.2s;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+        }
+
+        button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        #gameContainer {
+            position: relative;
+            width: 600px;
+            height: 400px;
+        }
+
+        .pause-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            font-size: 36px;
+            font-weight: bold;
+            text-shadow: 0 0 20px rgba(255, 0, 0, 0.8);
+            z-index: 200;
+            pointer-events: none;
+            display: none;
+        }
+
+        .pause-text.active {
+            display: block;
+            animation: pulse 0.6s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>▶ WASM RUNNER ◀</h1>
+
+        <div id="gameContainer">
+            <canvas id="gameCanvas" width="600" height="400"></canvas>
+            <div class="hud">
+                <div class="hud-item"><span class="hud-label">SCORE</span>: <span class="hud-value" id="hudScore">0</span></div>
+                <div class="hud-item"><span class="hud-label">LEVEL</span>: <span class="hud-value" id="hudLevel">1</span></div>
+                <div class="hud-item"><span class="hud-label">SPEED</span>: <span class="hud-value" id="hudSpeed">3.0</span></div>
+            </div>
+            <div class="pause-text" id="pauseText">⏸ PAUSED</div>
+        </div>
+
+        <div id="leaderboard" style="display: none; color: #fff; background: rgba(0, 0, 0, 0.8); padding: 20px; border-radius: 10px; border: 2px solid #667eea; margin-top: 20px; max-width: 600px;">
+            <h2 style="color: #00ff00; text-shadow: 0 0 10px rgba(0, 255, 0, 0.7); margin-bottom: 15px;">🏆 HIGH SCORES</h2>
+            <div id="scoresList" style="font-family: monospace; line-height: 1.8;"></div>
+            <button id="clearScoresBtn" style="margin-top: 15px; font-size: 14px; padding: 8px 15px;">Clear Scores</button>
+        </div>
+
+        <div class="controls">
+            <h2>⌨ CONTROLS</h2>
+            <p><strong>Keyboard:</strong> ← → Move | SPACE Jump | ESC Pause</p>
+            <p><strong>Mobile:</strong> Swipe left/right to move | Tap to jump</p>
+            <div class="info">Avoid red obstacles. Speed increases with score!<br><small>Click game area to enable sound</small></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import init, { GameState } from './pkg/wasm_runner.js';
+
+        let gameState;
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const containerWidth = 600;
+        const containerHeight = 400;
+
+        const hudScore = document.getElementById('hudScore');
+        const hudLevel = document.getElementById('hudLevel');
+        const hudSpeed = document.getElementById('hudSpeed');
+        const pauseText = document.getElementById('pauseText');
+
+        const keyState = {};
+        const pixelSize = 1; // For crisp pixel art
+        let scrollOffset = 0;
+        let frameCount = 0;
+
+        // Touch controls
+        let touchStartX = 0;
+        let touchStartTime = 0;
+
+        // Audio context
+        let audioContext;
+        let lastJumpTime = 0;
+        let lastCollisionTime = 0;
+        let lastLevelUpTime = 0;
+        const soundCooldown = 100; // ms between sounds to prevent overlap
+
+        // Colors
+        const colors = {
+            bg: '#1a1a2e',
+            player: '#00ff00',
+            playerBorder: '#00cc00',
+            obstacle: '#ff3333',
+            obstacleBorder: '#990000',
+            lane: '#2d2d44',
+            laneBorder: '#3d3d54',
+            grid: '#1d1d2a',
+        };
+
+        // Sound generation functions
+        function initAudio() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            return audioContext;
+        }
+
+        function playJumpSound() {
+            const now = Date.now();
+            if (now - lastJumpTime < soundCooldown) return;
+            lastJumpTime = now;
+
+            const ctx = initAudio();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.frequency.setValueAtTime(400, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(600, ctx.currentTime + 0.1);
+
+            gain.gain.setValueAtTime(0.3, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.1);
+        }
+
+        function playCollisionSound() {
+            const now = Date.now();
+            if (now - lastCollisionTime < soundCooldown) return;
+            lastCollisionTime = now;
+
+            const ctx = initAudio();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.frequency.setValueAtTime(200, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(50, ctx.currentTime + 0.2);
+
+            gain.gain.setValueAtTime(0.4, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.2);
+        }
+
+        function playLevelUpSound() {
+            const now = Date.now();
+            if (now - lastLevelUpTime < soundCooldown) return;
+            lastLevelUpTime = now;
+
+            const ctx = initAudio();
+            const notes = [523, 659, 784]; // C, E, G
+            
+            notes.forEach((freq, i) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+
+                osc.frequency.setValueAtTime(freq, ctx.currentTime);
+                gain.gain.setValueAtTime(0.2, ctx.currentTime + i * 0.05);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i * 0.05 + 0.15);
+
+                osc.start(ctx.currentTime + i * 0.05);
+                osc.stop(ctx.currentTime + i * 0.05 + 0.15);
+            });
+        }
+
+        async function main() {
+            await init();
+            gameState = new GameState(containerWidth, containerHeight);
+            console.log('Game initialized!');
+            gameLoop();
+        }
+
+        // Track previous level for level-up detection
+        let previousLevel = 1;
+        let gameOverSoundPlayed = false;
+
+        // Leaderboard
+        const leaderboardEl = document.getElementById('leaderboard');
+        const scoresListEl = document.getElementById('scoresList');
+        const clearScoresBtn = document.getElementById('clearScoresBtn');
+
+        function saveScore(score, level) {
+            const scores = JSON.parse(localStorage.getItem('wasmRunnerScores') || '[]');
+            scores.push({ score, level, date: new Date().toLocaleDateString() });
+            scores.sort((a, b) => b.score - a.score);
+            scores.splice(10); // Keep only top 10
+            localStorage.setItem('wasmRunnerScores', JSON.stringify(scores));
+            updateLeaderboard();
+        }
+
+        function updateLeaderboard() {
+            const scores = JSON.parse(localStorage.getItem('wasmRunnerScores') || '[]');
+            if (scores.length === 0) {
+                scoresListEl.innerHTML = '<p style="color: #aaa;">No scores yet. Play to get on the board!</p>';
+                return;
+            }
+
+            let html = '';
+            scores.forEach((entry, i) => {
+                const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `  ${i + 1}.`;
+                html += `<div>${medal} <span style="color: #ffff00;">${String(entry.score).padStart(6, ' ')}</span> (L${entry.level}) - ${entry.date}</div>`;
+            });
+            scoresListEl.innerHTML = html;
+        }
+
+        clearScoresBtn.addEventListener('click', () => {
+            if (confirm('Clear all high scores?')) {
+                localStorage.removeItem('wasmRunnerScores');
+                updateLeaderboard();
+            }
+        });
+
+        // Show leaderboard on first load
+        updateLeaderboard();
+        leaderboardEl.style.display = 'block';
+
+        // Input handling
+        document.addEventListener('keydown', (e) => {
+            keyState[e.key] = true;
+
+            if (e.key === 'ArrowLeft') {
+                gameState.move_left();
+            } else if (e.key === 'ArrowRight') {
+                gameState.move_right();
+            } else if (e.key === ' ') {
+                e.preventDefault();
+                gameState.jump();
+                playJumpSound();
+            } else if (e.key === 'Escape') {
+                gameState.toggle_pause();
+                updatePauseUI();
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            keyState[e.key] = false;
+        });
+
+        // Handle game restart
+        document.addEventListener('keydown', (e) => {
+            if (gameState && gameState.is_game_over() && e.key.toLowerCase() === 'r') {
+                gameState.reset();
+                gameOverSoundPlayed = false;
+                pauseText.classList.remove('active');
+            }
+        });
+
+        // Initialize audio on any user interaction (browser autoplay policy)
+        document.addEventListener('click', () => {
+            if (!audioContext) {
+                initAudio();
+            }
+        }, { once: true });
+
+        canvas.addEventListener('click', () => {
+            if (!audioContext) {
+                initAudio();
+            }
+        }, { once: true });
+
+        // Touch controls for mobile
+        canvas.addEventListener('touchstart', (e) => {
+            if (!audioContext) {
+                initAudio();
+            }
+            touchStartX = e.touches[0].clientX;
+            touchStartTime = Date.now();
+        });
+
+        canvas.addEventListener('touchend', (e) => {
+            const touchEndX = e.changedTouches[0].clientX;
+            const touchDuration = Date.now() - touchStartTime;
+            const deltaX = touchEndX - touchStartX;
+
+            // Tap (quick, minimal movement) = jump
+            if (touchDuration < 300 && Math.abs(deltaX) < 30) {
+                gameState.jump();
+                playJumpSound();
+            }
+            // Swipe left
+            else if (deltaX < -30) {
+                gameState.move_left();
+            }
+            // Swipe right
+            else if (deltaX > 30) {
+                gameState.move_right();
+            }
+        });
+
+        // Touch move for continuous movement
+        canvas.addEventListener('touchmove', (e) => {
+            if (!gameState || gameState.is_paused() || gameState.is_game_over()) return;
+            
+            const touchX = e.touches[0].clientX;
+            const canvasRect = canvas.getBoundingClientRect();
+            const relativeX = touchX - canvasRect.left;
+            const playerCenterX = gameState.get_player_x() + 20;
+            
+            // Move towards touch point
+            if (relativeX < playerCenterX - 20) {
+                gameState.move_left();
+            } else if (relativeX > playerCenterX + 20) {
+                gameState.move_right();
+            }
+        });
+
+        function updatePauseUI() {
+            pauseText.classList.toggle('active', gameState.is_paused());
+        }
+
+        function drawBackground() {
+            // Main background
+            ctx.fillStyle = colors.bg;
+            ctx.fillRect(0, 0, containerWidth, containerHeight);
+
+            // Animated speed lines (scrolling horizontal stripes)
+            const stripeHeight = 20;
+            const speed = gameState.get_speed();
+            const offset = (frameCount * speed) % stripeHeight;
+            
+            ctx.fillStyle = '#0a0a15';
+            for (let y = -offset; y < containerHeight; y += stripeHeight * 2) {
+                ctx.fillRect(0, y, containerWidth, stripeHeight);
+            }
+
+            // Grid pattern for visual depth
+            ctx.strokeStyle = colors.grid;
+            ctx.lineWidth = 1;
+            const gridSize = 40;
+            for (let y = (scrollOffset % gridSize) - gridSize; y < containerHeight; y += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(containerWidth, y);
+                ctx.stroke();
+            }
+
+            // Lane dividers
+            ctx.strokeStyle = colors.laneBorder;
+            ctx.lineWidth = 2;
+            for (let x = 0; x < containerWidth; x += 150) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, containerHeight);
+                ctx.stroke();
+            }
+
+            // Animated center dashed line
+            ctx.strokeStyle = colors.laneBorder;
+            ctx.setLineDash([15, 10]);
+            ctx.lineDashOffset = -(frameCount * speed) % 25;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(containerWidth / 2, 0);
+            ctx.lineTo(containerWidth / 2, containerHeight);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.lineDashOffset = 0;
+        }
+
+        function drawPlayer() {
+            const x = gameState.get_player_x();
+            const y = gameState.get_player_y();
+            const w = 40;
+            const h = 40;
+
+            // Shadow
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.fillRect(x + 2, y + h + 2, w, 3);
+
+            // Main block
+            ctx.fillStyle = colors.player;
+            ctx.fillRect(x, y, w, h);
+
+            // Border
+            ctx.strokeStyle = colors.playerBorder;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x, y, w, h);
+
+            // Eyes
+            ctx.fillStyle = '#000';
+            ctx.fillRect(x + 8, y + 8, 8, 8);
+            ctx.fillRect(x + 24, y + 8, 8, 8);
+
+            // Mouth
+            ctx.fillRect(x + 10, y + 24, 20, 4);
+        }
+
+        function drawObstacles() {
+            const obstacleCount = gameState.get_obstacle_count();
+
+            for (let i = 0; i < obstacleCount; i++) {
+                const obstacle = gameState.get_obstacle(i);
+                if (!obstacle) continue;
+
+                const x = obstacle.get_x();
+                const y = obstacle.get_y();
+                const w = obstacle.get_width();
+                const h = obstacle.get_height();
+
+                // Gradient effect
+                const gradient = ctx.createLinearGradient(x, y, x + w, y + h);
+                gradient.addColorStop(0, '#ff6666');
+                gradient.addColorStop(1, '#cc0000');
+
+                // Main block
+                ctx.fillStyle = gradient;
+                ctx.fillRect(x, y, w, h);
+
+                // Border
+                ctx.strokeStyle = colors.obstacleBorder;
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x, y, w, h);
+
+                // Hazard pattern
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                for (let dx = 0; dx < w; dx += 12) {
+                    for (let dy = 0; dy < h; dy += 12) {
+                        if ((dx + dy) % 24 === 0) {
+                            ctx.fillRect(x + dx, y + dy, 6, 6);
+                        }
+                    }
+                }
+            }
+        }
+
+        function drawUI() {
+            // Update HUD
+            hudScore.textContent = gameState.get_score();
+            hudLevel.textContent = gameState.get_level();
+            hudSpeed.textContent = gameState.get_speed().toFixed(1);
+
+            // Check for level up (only if not game over)
+            if (!gameState.is_game_over()) {
+                const currentLevel = gameState.get_level();
+                if (currentLevel > previousLevel) {
+                    playLevelUpSound();
+                    previousLevel = currentLevel;
+                }
+            }
+
+            // Game over overlay (only draw once)
+            if (gameState.is_game_over()) {
+                if (!gameOverSoundPlayed) {
+                    playCollisionSound();
+                    saveScore(gameState.get_score(), gameState.get_level());
+                    gameOverSoundPlayed = true;
+                }
+                
+                // Draw semi-transparent overlay
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+                ctx.fillRect(0, 0, containerWidth, containerHeight);
+
+                // Game over text
+                ctx.fillStyle = '#ff3333';
+                ctx.font = 'bold 48px monospace';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('GAME OVER', containerWidth / 2, containerHeight / 2 - 40);
+
+                // Score and level
+                ctx.fillStyle = '#ffff00';
+                ctx.font = 'bold 24px monospace';
+                ctx.fillText(`SCORE: ${gameState.get_score()}`, containerWidth / 2, containerHeight / 2 + 20);
+                ctx.fillText(`LEVEL: ${gameState.get_level()}`, containerWidth / 2, containerHeight / 2 + 60);
+
+                // Restart instruction
+                ctx.fillStyle = '#00ff00';
+                ctx.font = '16px monospace';
+                ctx.fillText('Press R to restart', containerWidth / 2, containerHeight / 2 + 100);
+            }
+        }
+
+        function handleGameOver() {
+            if (gameState.is_game_over()) {
+                document.addEventListener('keydown', (e) => {
+                    if (e.key.toLowerCase() === 'r') {
+                        gameState.reset();
+                        pauseText.classList.remove('active');
+                    }
+                }, { once: true });
+            }
+        }
+
+        function gameLoop() {
+            // Update game state
+            gameState.update();
+
+            // Clear and draw
+            drawBackground();
+            drawObstacles();
+            drawPlayer();
+            drawUI();
+
+            // Handle game over
+            handleGameOver();
+
+            // Increment frame counter for animations
+            frameCount++;
+
+            // Continue loop
+            requestAnimationFrame(gameLoop);
+        }
+
+        main().catch(err => {
+            console.error('Failed to load WASM module:', err);
+        });
+    </script>
+</body>
+</html>
